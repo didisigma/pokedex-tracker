@@ -21,6 +21,58 @@ button,input,select{font:inherit}button{cursor:pointer}.app{max-width:1450px;mar
 </style>
 </head>
 <body>
+<style>
+.mode-switch{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 18px}
+.mode-switch button{border:1px solid #d7dce5;border-radius:10px;padding:9px 14px;background:#fff;cursor:pointer;font-weight:700}
+.mode-switch button.active{background:#222;color:#fff;border-color:#222}
+.mode-help{font-size:.9rem;color:#667085;margin-bottom:12px}
+.form-row td:first-child{font-weight:700}
+</style>
+<script>
+/* Two main modes:
+   - complete: Pokédex + all special-form entries in one list
+   - pokedex: only the 1028 base entries
+   - forms: only special forms
+*/
+window.__collectionMode = 'complete';
+
+function getRowsForMode(rows, mode){
+  if(!Array.isArray(rows)) return rows;
+  if(mode === 'complete') return rows;
+  return rows.filter(r => {
+    const s = JSON.stringify(r).toLowerCase();
+    const isForm = ['méga','mega','gigamax','alola','galar','hisui','paldea','forme','style','mille poings','poing final']
+      .some(k => s.includes(k));
+    return mode === 'forms' ? isForm : !isForm;
+  });
+}
+
+function installModeSwitcher(){
+  const target = document.querySelector('main') || document.body;
+  if(document.querySelector('.mode-switch')) return;
+  const box=document.createElement('div');
+  box.innerHTML=`<div class="mode-switch">
+    <button data-mode="complete" class="active">📚 Liste complète</button>
+    <button data-mode="pokedex">📖 Pokédex (1028)</button>
+    <button data-mode="forms">✨ Formes uniquement</button>
+  </div>
+  <div class="mode-help">La liste complète rassemble les 1028 Pokémon et les formes spéciales. Les couleurs indiquent le type de forme.</div>`;
+  target.insertBefore(box, target.firstChild);
+  box.querySelectorAll('button').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      box.querySelectorAll('button').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      window.__collectionMode=btn.dataset.mode;
+      // Ask the existing app to re-render using its current data if it exposes a renderer.
+      if(typeof window.render === 'function') window.render();
+      else if(typeof window.renderTable === 'function') window.renderTable();
+      else location.hash='mode='+window.__collectionMode;
+    });
+  });
+}
+document.addEventListener('DOMContentLoaded', installModeSwitcher);
+</script>
+
 <div class="app">
 <header class="hero"><div class="title"><h1>Pokédex Collection</h1><p>Objectif : <b>1 AR/SIR par Pokémon</b> (ou la meilleure carte disponible en attendant), avec les formes régionales, Méga, Gigamax et variantes TCG que tu veux suivre séparément.</p></div><div class="pokeball" aria-hidden="true"></div></header>
 <section class="stats" id="stats"></section>
@@ -124,4 +176,9 @@ function init(){
 }
 init();
 </script>
+
+<script>
+window.getCollectionMode = function(){ return window.__collectionMode || 'complete'; };
+</script>
+
 </body></html>
