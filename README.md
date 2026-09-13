@@ -1,12 +1,15 @@
-# Pokémon Card Collection Tracker — v2
+# Pokémon Card Binder Tracker — version corrigée
 
-## Modes
-- **Liste complète**: Pokédex + formes spéciales dans une seule liste.
-- **Pokédex (1028)**: uniquement les entrées classiques.
-- **Formes uniquement**: uniquement les formes spéciales.
+Contenu :
+- 1028 Pokémon, avec l'ordre personnalisé conservé ;
+- 215 entrées de formes spéciales intégrées à la liste complète ;
+- 96 Méga, dont les 48 entrées actuelles de Legends: Z-A listées par Serebii (avec dédoublonnage des Méga déjà présentes) ;
+- 56 formes régionales ;
+- 32 Gigamax ;
+- 31 variantes explicitement nommées sur des cartes/checklists TCG ;
+- recherche, filtres, vues Liste complète / Pokédex / Formes ;
+- sauvegarde locale, export/import JSON ;
+- artwork officiel du Pokédex Pokémon, avec fallback.
 
-The rest of the collection features from the previous version are preserved.
-
-## Publishing
-Upload `index.html` and `.nojekyll` to the root of a public GitHub repository, then:
-Settings → Pages → Build and deployment → Deploy from a branch → main → /(root) → Save.
+## GitHub Pages
+Décompresse le ZIP, puis téléverse `index.html` et `.nojekyll` à la racine du dépôt public. Ensuite : `Settings` → `Pages` → `Deploy from a branch` → `main` → `/(root)` → `Save`.
