@@ -1,6 +1,12 @@
-# Pokémon Card Collection Tracker
+# Pokémon Card Collection Tracker — artwork update
 
-Three visual themes are available: 🌑 Nuit, 🌒 Sombre and ☀️ Blanc.
-Theme choice is saved locally in the browser, separately from the collection data.
+Cette version conserve la collection, les modes et les thèmes précédents.
 
-The collection itself remains local to the browser and can still be exported/imported as JSON.
+### Artwork
+- Pokémon classiques : artwork officiel Pokémon.com.
+- Formes spéciales : artwork officiel par forme via les assets `official-artwork` de PokéAPI quand ils existent.
+- Le catalogue d'images est mis en cache localement pendant 7 jours.
+- Fallback automatique vers l'artwork officiel de base si une forme ne renvoie pas d'image.
+
+### Publication
+Remplace `index.html`, `.nojekyll` et `README.md` dans ton repository GitHub Pages.

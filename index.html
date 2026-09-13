@@ -40,7 +40,7 @@ select,.btn{height:50px;border:2px solid #c4d0df;border-radius:13px;background:#
 .note{color:var(--muted);font-size:.88rem;line-height:1.45;margin:8px 0 14px}.note strong{color:#35455e}
 .stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:14px 0 18px}.stat{padding:15px 16px;background:#fff;border:2px solid #d2dce8;border-radius:16px;box-shadow:var(--shadow)}
 .stat .n{font-size:1.45rem;font-weight:950;letter-spacing:-.03em}.stat .l{color:var(--muted);font-size:.86rem;font-weight:850;margin-top:4px}.bar{height:8px;background:#e6ecf4;border-radius:999px;margin-top:10px;overflow:hidden}.bar i{display:block;height:100%;background:var(--accent);border-radius:999px}
-.results-note{margin:0 0 10px;color:#61718a;font-size:.86rem;font-weight:750}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(345px,1fr));gap:15px}
+.art-note{margin:0 0 10px;color:var(--muted);font-size:.82rem;font-weight:700}.results-note{margin:0 0 10px;color:#61718a;font-size:.86rem;font-weight:750}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(345px,1fr));gap:15px}
 .card{background:#fff;border:3px solid #c3cedd;border-radius:19px;box-shadow:0 7px 22px rgba(20,32,51,.06);overflow:hidden;display:flex;flex-direction:column;min-height:255px;transition:.15s ease}
 .card:hover{transform:translateY(-2px);box-shadow:0 13px 30px rgba(20,32,51,.12)}
 .card.status-success{border-color:#22b978;background:linear-gradient(180deg,#f7fffb,#fff)}.card.status-success .artbox{background:var(--success-bg);border-color:#82d8b0}
@@ -170,6 +170,7 @@ body{background:var(--page-grad) !important;transition:background .25s ease,colo
     <button class="tab" data-view="forms">✨ Formes spéciales · <span id="formsCount">–</span></button>
   </div>
 
+  <div class="art-note">🖼️ Les Pokémon utilisent les artworks officiels ; les formes spéciales utilisent leur artwork officiel par forme quand il est disponible.</div>
   <div class="legend">
     <span class="chip">✅ AR/SIR</span><span class="chip">🟡 Provisoire</span><span class="chip">🟣 Autre premium</span><span class="chip">🔴 À trouver</span>
     <span class="chip"><i class="dot dot-reg"></i> Régionale</span><span class="chip"><i class="dot dot-mega"></i> Méga</span><span class="chip"><i class="dot dot-giga"></i> Gigamax</span><span class="chip"><i class="dot dot-tcg"></i> Variante TCG</span>
@@ -232,13 +233,155 @@ function allEntries(){
   return out;
 }
 const ALL=allEntries();
+/* Artwork:
+   - Base Pokémon: official Pokémon.com Pokédex art.
+   - Special forms: form-specific official-artwork assets exposed by PokéAPI.
+     The catalog is fetched once and cached locally for 7 days.
+   - Last fallback: base official artwork / PokeAPI official artwork if available.
+*/
+const ART_CACHE_KEY='pokemon-form-art-catalog-v1';
+const ART_CACHE_TTL=7*24*60*60*1000;
+let EN_NAMES={};
+let FORM_ART={};
+let ART_READY=false;
 function officialArt(dex,x){
   const n=String(dex).padStart(3,'0');
-  if(x?.type==='special'&&/ X$/.test(x.form)) return `https://assets.pokemon.com/assets/cms2/img/pokedex/full/${n}_f2.png`;
-  if(x?.type==='special'&&/ Y$/.test(x.form)) return `https://assets.pokemon.com/assets/cms2/img/pokedex/full/${n}_f3.png`;
+  if(x?.type==='special'){
+    const base=`https://assets.pokemon.com/assets/cms2/img/pokedex/full/${n}.png`;
+    return base;
+  }
   return `https://assets.pokemon.com/assets/cms2/img/pokedex/full/${n}.png`;
 }
-function fallbackArt(dex,img){img.onerror=()=>{if(!img.dataset.fallback){img.dataset.fallback='1';img.src=`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${dex}.png`}else{img.style.display='none'}}}
+function slugEnglish(s){
+  return String(s??'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/♀/g,'-f').replace(/♂/g,'-m')
+    .replace(/['’.]/g,'').replace(/:/g,'-')
+    .replace(/[^a-zA-Z0-9]+/g,'-').replace(/^-+|-+$/g,'').toLowerCase();
+}
+function specialApiSlug(x){
+  const base=slugEnglish(EN_NAMES[x.dex]||'');
+  if(!base) return null;
+  const f=String(x.form||'').toLowerCase();
+
+  if(x.category==='Mega'){
+    if(/original color/.test(f)) return `${base}-original-mega`;
+    if(/\bx\b/.test(f)) return `${base}-mega-x`;
+    if(/\by\b/.test(f)) return `${base}-mega-y`;
+    if(/\bz\b/.test(f)) return `${base}-mega-z`;
+    return `${base}-mega`;
+  }
+
+  if(x.category==='Gigamax'){
+    if(x.dex===892){
+      if(/mille poings/.test(f)) return 'urshifu-rapid-strike-gmax';
+      if(/poing final/.test(f)) return 'urshifu-single-strike-gmax';
+    }
+    if(x.dex===849) return 'toxtricity-amped-gmax';
+    return `${base}-gmax`;
+  }
+
+  if(x.category==='Régionale'){
+    if(/alola/.test(f)) return `${base}-alola`;
+    if(/galar/.test(f)) return `${base}-galar`;
+    if(/hisui/.test(f)) return `${base}-hisui`;
+    if(/paldea/.test(f)) return `${base}-paldea`;
+  }
+
+  if(x.category==='Variante TCG'){
+    const map={
+      '892|forme mille poings':'urshifu-rapid-strike',
+      '892|forme poing final':'urshifu-single-strike',
+      '745|forme diurne':'lycanroc-midday',
+      '745|forme nocturne':'lycanroc-midnight',
+      '745|forme crépusculaire':'lycanroc-dusk',
+      '479|forme chaleur':'rotom-heat',
+      '479|forme lavage':'rotom-wash',
+      '479|forme froid':'rotom-frost',
+      '479|forme hélice':'rotom-fan',
+      '479|forme tonte':'rotom-mow',
+      '646|kyurem noir':'kyurem-black',
+      '646|kyurem blanc':'kyurem-white',
+      '800|crinière du couchant':'necrozma-dusk',
+      '800|ailes de l’aurore':'necrozma-dawn',
+      '898|cavalier du froid':'calyrex-ice',
+      '898|cavalier d’effroi':'calyrex-shadow',
+      '1017|masque turquoise':'ogerpon-teal',
+      '1017|masque foyer':'ogerpon-hearthflame',
+      '1017|masque source':'ogerpon-wellspring',
+      '1017|masque pierre':'ogerpon-cornerstone',
+      '412|cape plante':'burmy-plant',
+      '412|cape sable':'burmy-sandy',
+      '412|cape déchet':'burmy-trash',
+      '413|cape plante':'wormadam-plant',
+      '413|cape sable':'wormadam-sandy',
+      '413|cape déchet':'wormadam-trash',
+      '423|mer orient':'gastrodon-east',
+      '423|mer occident':'gastrodon-west',
+      '351|forme solaire':'castform-sunny',
+      '351|forme eau de pluie':'castform-rainy',
+      '351|forme blizzard':'castform-snowy'
+    };
+    return map[`${x.dex}|${f}`] || null;
+  }
+  return null;
+}
+function fallbackArt(dex,img){
+  img.onerror=()=>{
+    if(img.dataset.fallback==='0'){
+      img.dataset.fallback='1';
+      img.src=`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${dex}.png`;
+    }else{
+      img.dataset.fallback='2';
+      img.src=`https://assets.pokemon.com/assets/cms2/img/pokedex/full/${String(dex).padStart(3,'0')}.png`;
+    }
+  }
+}
+async function loadFormArtwork(){
+  try{
+    const cached=JSON.parse(localStorage.getItem(ART_CACHE_KEY)||'null');
+    if(cached && cached.ts && Date.now()-cached.ts<ART_CACHE_TTL && cached.en && cached.forms){
+      EN_NAMES=cached.en; FORM_ART=cached.forms; ART_READY=true; applySpecialArtwork(); return;
+    }
+
+    const [enResp, listResp]=await Promise.all([
+      fetch('https://raw.githubusercontent.com/sindresorhus/pokemon/main/data/en.json',{cache:'force-cache'}),
+      fetch('https://pokeapi.co/api/v2/pokemon?limit=2000',{cache:'force-cache'})
+    ]);
+    if(!enResp.ok || !listResp.ok) throw new Error('artwork catalogs unavailable');
+
+    const en=await enResp.json();
+    en.forEach((name,i)=>EN_NAMES[i+1]=name);
+
+    const list=await listResp.json();
+    const forms={};
+    for(const r of (list.results||[])){
+      const m=String(r.url||'').match(/\/pokemon\/(\d+)\/?$/);
+      if(m) forms[r.name]=`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${m[1]}.png`;
+    }
+    FORM_ART=forms;
+    localStorage.setItem(ART_CACHE_KEY,JSON.stringify({ts:Date.now(),en:EN_NAMES,forms:FORM_ART}));
+    ART_READY=true;
+    applySpecialArtwork();
+  }catch(e){
+    ART_READY=false;
+    // The page still works with the base official artwork fallbacks.
+  }
+}
+function applySpecialArtwork(){
+  if(!ART_READY) return;
+  document.querySelectorAll('img[data-special-art]').forEach(img=>{
+    try{
+      const payload=JSON.parse(img.dataset.specialArt);
+      const slug=specialApiSlug(payload);
+      const url=slug && FORM_ART[slug];
+      if(url){
+        img.dataset.fallback='0';
+        img.src=url;
+        img.title=`Artwork officiel — ${slug}`;
+      }
+    }catch(e){}
+  });
+}
 function filters(){return {q:document.getElementById('search').value.trim().toLocaleLowerCase('fr'),status:document.getElementById('statusFilter').value,gen:document.getElementById('genFilter').value,special:document.getElementById('specialFilter').value,owned:document.getElementById('ownedOnly').checked}}
 function matches(x,f){
   const it=getItem(x.key,x.type==='special'?'special':'items');
@@ -258,7 +401,7 @@ function card(x){
   const badge=special?`<span class="special-tag">${esc(x.category)}</span>`:`<span class="base-tag">Pokédex</span>`;
   const sub=special?esc(x.form):`Génération ${esc(x.gen)}${x.lineage&&x.lineage!=='—'?` · lignée ${esc(x.lineage)}`:''}`;
   return `<article class="${classes.join(' ')}">
-    <div class="cardhead"><div class="artbox"><img src="${officialArt(x.dex,x)}" alt="${esc(x.name)}" loading="lazy" onerror="fallbackArt(${x.dex},this)"></div><div><div class="dex">#${String(x.dex).padStart(4,'0')}</div><div class="name">${esc(x.name)}</div><div class="form">${sub}</div></div><div>${badge}</div></div>
+    <div class="cardhead"><div class="artbox"><img src="${officialArt(x.dex,x)}" alt="${esc(x.name)}${special?' — '+esc(x.form):''}" loading="lazy" ${special?`data-special-art="${esc(JSON.stringify({dex:x.dex,form:x.form,category:x.category}))}"`:''} onerror="fallbackArt(${x.dex},this)"></div><div><div class="dex">#${String(x.dex).padStart(4,'0')}</div><div class="name">${esc(x.name)}</div><div class="form">${sub}</div></div><div>${badge}</div></div>
     <div class="content"><div class="statusrow"><span class="statusbadge status-${sc}">${esc(it.status)}</span><span class="dex">${special?'Forme suivie séparément':'Objectif principal'}</span></div>
       <div class="ownedline"><label class="checklabel"><input type="checkbox" data-a="owned" data-k="${esc(x.key)}" data-b="${bucket}" ${it.owned?'checked':''}> <span>Carte possédée</span></label>${it.owned?'<span class="checkmark">✓ enregistrée</span>':'<span class="dex">À compléter</span>'}</div>
       <div class="fields"><select data-a="status" data-k="${esc(x.key)}" data-b="${bucket}">${STATUS.map(o=>`<option ${it.status===o?'selected':''}>${esc(o)}</option>`).join('')}</select><input data-a="card" data-k="${esc(x.key)}" data-b="${bucket}" value="${esc(it.card)}" placeholder="Carte / extension"><input class="full" data-a="notes" data-k="${esc(x.key)}" data-b="${bucket}" value="${esc(it.notes)}" placeholder="Notes (optionnel)"></div>
@@ -293,6 +436,7 @@ document.getElementById('resetBtn').addEventListener('click',()=>{if(confirm('R�
 document.querySelectorAll('.theme-choice').forEach(b=>b.addEventListener('click',()=>applyTheme(b.dataset.themeChoice)));
 initTheme();
 render();
+loadFormArtwork();
 </script>
 </body>
 </html>
